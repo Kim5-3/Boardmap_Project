@@ -1,30 +1,57 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:flutter/material.dart';
 import 'package:boardmap_project/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('BoardMap application', () {
+    testWidgets('displays the BoardMap login screen', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(const BoardMapApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      expect(find.text('BoardMap'), findsOneWidget);
+      expect(find.text('Welcome back'), findsOneWidget);
+      expect(find.text('Sign in'), findsOneWidget);
+      expect(find.text('Email or username'), findsOneWidget);
+      expect(find.text('Password'), findsOneWidget);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    testWidgets('shows errors when login fields are empty', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(const BoardMapApp());
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+      await tester.ensureVisible(find.text('Sign in'));
+      await tester.tap(find.text('Sign in'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('This field is required.'), findsOneWidget);
+      expect(
+        find.text('Please enter your password.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('opens the registration form', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(const BoardMapApp());
+
+      final registerButton = find.widgetWithText(
+        OutlinedButton,
+        'Create an account',
+      );
+
+      await tester.ensureVisible(registerButton);
+      await tester.tap(registerButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create your account'), findsOneWidget);
+      expect(find.text('Full name'), findsOneWidget);
+      expect(find.text('Username'), findsOneWidget);
+      expect(find.text('Email address'), findsOneWidget);
+      expect(find.text('Confirm password'), findsOneWidget);
+    });
   });
 }

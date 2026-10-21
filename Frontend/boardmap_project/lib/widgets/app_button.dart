@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 class AppButton extends StatelessWidget {
@@ -21,12 +20,9 @@ class AppButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final Widget content = isLoading
         ? const SizedBox(
-            height: 21,
-            width: 21,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.2,
-              color: Colors.white,
-            ),
+            height: 20,
+            width: 20,
+            child: CircularProgressIndicator(strokeWidth: 2.2),
           )
         : Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -36,14 +32,7 @@ class AppButton extends StatelessWidget {
                 Icon(icon, size: 19),
                 const SizedBox(width: 9),
               ],
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.2,
-                ),
-              ),
+              Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             ],
           );
 
@@ -56,9 +45,7 @@ class AppButton extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             foregroundColor: const Color(0xFF218653),
             side: const BorderSide(color: Color(0xFF218653)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           child: content,
         ),
@@ -75,9 +62,7 @@ class AppButton extends StatelessWidget {
           foregroundColor: Colors.white,
           disabledBackgroundColor: const Color(0xFF91BCA3),
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         child: content,
       ),

@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'screens/report_form_screen.dart';
 import 'screens/login_screen.dart';
 
 void main() {
@@ -57,6 +58,9 @@ class BoardMapApp extends StatelessWidget {
         ),
       ),
       home: const LoginScreen(),
+      routes: {
+        '/report': (context) => const ReportFormScreen(),
+      },
     );
   }
 }

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 class AppTextField extends StatelessWidget {
@@ -12,6 +11,7 @@ class AppTextField extends StatelessWidget {
   final TextInputType keyboardType;
   final TextInputAction textInputAction;
   final bool enabled;
+  final int maxLines;
 
   const AppTextField({
     super.key,
@@ -25,6 +25,7 @@ class AppTextField extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.textInputAction = TextInputAction.next,
     this.enabled = true,
+    this.maxLines = 1,
   });
 
   @override
@@ -36,15 +37,12 @@ class AppTextField extends StatelessWidget {
       textInputAction: textInputAction,
       validator: validator,
       enabled: enabled,
+      maxLines: maxLines,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(
-          prefixIcon,
-          size: 21,
-          color: const Color(0xFF718077),
-        ),
+        prefixIcon: Icon(prefixIcon, size: 21, color: const Color(0xFF718077)),
         suffixIcon: suffixIcon,
       ),
     );

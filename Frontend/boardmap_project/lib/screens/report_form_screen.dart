@@ -1,9 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../widgets/app_button.dart';
-import '../widgets/app_text_field.dart';
+import '../data/image_picker.dart';
+import '../services/api_service.dart';
 
-enum ReportUiState { idle, loading, success, empty, error }
+const _issueCategories = [
+  'Account and Login Problems',
+  'Boarding House Listing Issues',
+  'Incorrect Property Information',
+  'Map and Location Problems',
+  'Inquiries and Messaging',
+  'Technical Errors',
+  'Security and Privacy Concerns',
+  'Other',
+];
 
 class ReportFormScreen extends StatefulWidget {
   const ReportFormScreen({super.key});
@@ -14,232 +24,252 @@ class ReportFormScreen extends StatefulWidget {
 
 class _ReportFormScreenState extends State<ReportFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final List<_ReportRecord> _reports = [];
-
-  ReportUiState _state = ReportUiState.empty;
-  bool _simulateFailure = false;
-  String? _errorMessage;
+  final _subject = TextEditingController();
+  final _description = TextEditingController();
+  String? _category;
+  PickedBoardMapImage? _attachment;
+  bool _busy = false;
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
+    _subject.dispose();
+    _description.dispose();
     super.dispose();
   }
 
-  Future<void> submitReport({bool validate = true}) async {
-    if (_state == ReportUiState.loading) return;
-    if (validate && !(_formKey.currentState?.validate() ?? false)) return;
-
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _state = ReportUiState.loading;
-      _errorMessage = null;
-    });
-
+  Future<void> _pickAttachment() async {
     try {
-      await Future<void>.delayed(const Duration(seconds: 2));
-      if (_simulateFailure) {
-        throw StateError('The demo network request was interrupted.');
+      final picked = await pickBoardMapImages();
+      if (!mounted || picked.isEmpty) return;
+      final image = picked.first;
+      final allowed = RegExp(
+        r'\.(jpe?g|png|webp)$',
+        caseSensitive: false,
+      ).hasMatch(image.name);
+      if (!allowed) {
+        _showMessage(
+          'Unsupported file format. Please upload JPG, PNG, or WEBP.',
+        );
+        return;
       }
-
-      _reports.add(_ReportRecord(
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        submittedAt: DateTime.now(),
-      ));
-      if (!mounted) return;
-      setState(() => _state = ReportUiState.success);
+      if (image.bytes.isEmpty || image.bytes.length > 5 * 1024 * 1024) {
+        _showMessage('File size exceeds the 5 MB limit.');
+        return;
+      }
+      setState(() => _attachment = image);
     } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = error is StateError
-            ? error.message.toString()
-            : 'We could not submit your report. Please try again.';
-        _state = ReportUiState.error;
-      });
+      if (mounted) _showMessage(error.toString());
     }
   }
 
-  void _startReport() {
-    _titleController.clear();
-    _descriptionController.clear();
-    _formKey.currentState?.reset();
-    setState(() {
-      _errorMessage = null;
-      _state = ReportUiState.idle;
-    });
+  Future<void> _submit() async {
+    if (_busy) return;
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _busy = true);
+    try {
+      final report = await BoardMapApi.instance.submitIssueReport(
+        category: _category!,
+        subject: _subject.text.trim(),
+        description: _description.text.trim(),
+        filename: _attachment?.name,
+        attachment: _attachment?.bytes,
+      );
+      if (!mounted) return;
+      _formKey.currentState!.reset();
+      _subject.clear();
+      _description.clear();
+      setState(() {
+        _category = null;
+        _attachment = null;
+      });
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: Icon(
+            Icons.check_circle_outline,
+            color: Theme.of(dialogContext).colorScheme.primary,
+            size: 42,
+          ),
+          title: const Text('Report submitted'),
+          content: Text(
+            'Your report has been submitted successfully. Reference: ${report['reference_number']}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Close'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                Navigator.pushNamed(context, '/reports/my');
+              },
+              child: const Text('View My Reports'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (mounted) _showMessage(error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
+
+  void _showMessage(String message) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Report an issue'),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
+        title: const Text('Report an Issue'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.pushNamed(context, '/reports/my'),
+            icon: const Icon(Icons.inbox_outlined),
+            label: const Text('My Reports'),
+          ),
+        ],
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              child: _buildStateView(),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStateView() {
-    switch (_state) {
-      case ReportUiState.empty:
-        if (_reports.isNotEmpty) return _reportsView();
-        return _messageView(
-          key: const ValueKey(ReportUiState.empty),
-          icon: Icons.inbox_outlined,
-          title: 'No reports found',
-          message: 'You have not submitted any reports yet.',
-          action: AppButton(
-            label: 'Create a report',
-            icon: Icons.add_rounded,
-            onPressed: _startReport,
-          ),
-        );
-      case ReportUiState.loading:
-        return _messageView(
-          key: const ValueKey(ReportUiState.loading),
-          icon: Icons.cloud_upload_outlined,
-          title: 'Submitting your report',
-          message: 'Please wait while we send your information.',
-          action: const Padding(
-            padding: EdgeInsets.all(12),
-            child: CircularProgressIndicator(),
-          ),
-        );
-      case ReportUiState.success:
-        return _messageView(
-          key: const ValueKey(ReportUiState.success),
-          icon: Icons.check_circle_outline_rounded,
-          title: 'Report submitted',
-          message: 'Your report was added to your reports list.',
-          action: Column(
-            children: [
-              AppButton(
-                label: 'Submit another report',
-                icon: Icons.add_rounded,
-                onPressed: _startReport,
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => Navigator.of(context).maybePop(),
-                child: const Text('Return to BoardMap'),
-              ),
-              TextButton(
-                onPressed: () => setState(() => _state = ReportUiState.empty),
-                child: const Text('View my reports'),
-              ),
-            ],
-          ),
-        );
-      case ReportUiState.error:
-        return _messageView(
-          key: const ValueKey(ReportUiState.error),
-          icon: Icons.error_outline_rounded,
-          title: 'Could not submit report',
-          message: _errorMessage ?? 'Please check your connection and retry.',
-          action: Column(
-            children: [
-              AppButton(
-                label: 'Retry',
-                icon: Icons.refresh_rounded,
-                onPressed: () => submitReport(validate: false),
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => setState(() => _state = ReportUiState.idle),
-                child: const Text('Edit report'),
-              ),
-            ],
-          ),
-        );
-      case ReportUiState.idle:
-        return _formView();
-    }
-  }
-
-  Widget _formView() {
-    return SingleChildScrollView(
-      key: const ValueKey(ReportUiState.idle),
-      child: Card(
-        elevation: 0,
-        color: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFFE0E9E2)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxWidth: 760),
           child: Form(
             key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: ListView(
+              padding: const EdgeInsets.all(22),
               children: [
-                const Text(
-                  'Tell us what happened',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                Text(
+                  'Encountered a problem? Let us know so our team can help.',
+                  style: Theme.of(context).textTheme.bodyLarge
+                      ?.copyWith(color: colors.onSurfaceVariant),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Share a problem with a listing or your BoardMap experience.',
-                  style: TextStyle(color: Colors.blueGrey),
-                ),
-                const SizedBox(height: 22),
-                AppTextField(
-                  controller: _titleController,
-                  label: 'Report title',
-                  hint: 'Briefly describe the issue',
-                  prefixIcon: Icons.title_rounded,
-                  enabled: _state != ReportUiState.loading,
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Enter a report title.'
-                      : value.trim().length < 4
-                          ? 'Use at least 4 characters.'
-                          : null,
+                const SizedBox(height: 20),
+                DropdownButtonFormField<String>(
+                  initialValue: _category,
+                  decoration: const InputDecoration(
+                    labelText: 'Issue category',
+                    prefixIcon: Icon(Icons.category_outlined),
+                  ),
+                  items: _issueCategories
+                      .map(
+                        (category) => DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        ),
+                      )
+                      .toList(),
+                  validator: (value) =>
+                      value == null ? 'Please select an issue category.' : null,
+                  onChanged: (value) => setState(() => _category = value),
                 ),
                 const SizedBox(height: 16),
-                AppTextField(
-                  controller: _descriptionController,
-                  label: 'Description',
-                  hint: 'Include details that can help us investigate',
-                  prefixIcon: Icons.description_outlined,
-                  maxLines: 5,
-                  enabled: _state != ReportUiState.loading,
+                TextFormField(
+                  controller: _subject,
+                  maxLength: 100,
+                  inputFormatters: [LengthLimitingTextInputFormatter(100)],
+                  decoration: const InputDecoration(
+                    labelText: 'Subject',
+                    hintText: 'Briefly summarize the problem',
+                    prefixIcon: Icon(Icons.short_text_rounded),
+                  ),
                   validator: (value) => value == null || value.trim().isEmpty
-                      ? 'Enter a description.'
-                      : value.trim().length < 10
-                          ? 'Add a little more detail (at least 10 characters).'
-                          : null,
+                      ? 'Please enter a subject for your report.'
+                      : null,
                 ),
-                const SizedBox(height: 12),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Simulate a network error'),
-                  subtitle: const Text('Demo control for the Error and Retry states.'),
-                  value: _simulateFailure,
-                  onChanged: (value) => setState(() => _simulateFailure = value),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _description,
+                  minLines: 5,
+                  maxLines: 9,
+                  maxLength: 2000,
+                  inputFormatters: [LengthLimitingTextInputFormatter(2000)],
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    alignLabelWithHint: true,
+                    hintText: 'Please describe the issue you encountered and explain what happened.',
+                  ),
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Please describe the issue you encountered.'
+                      : null,
                 ),
-                const SizedBox(height: 12),
-                AppButton(
-                  label: 'Submit report',
-                  icon: Icons.send_rounded,
-                  isLoading: _state == ReportUiState.loading,
-                  onPressed: _state == ReportUiState.loading ? null : submitReport,
+                const SizedBox(height: 10),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Screenshot or image (optional)',
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'JPG, JPEG, PNG, or WEBP. Maximum 5 MB.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_attachment == null)
+                          OutlinedButton.icon(
+                            onPressed: _busy ? null : _pickAttachment,
+                            icon: const Icon(Icons.attach_file),
+                            label: const Text('Choose an image'),
+                          )
+                        else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _attachment!.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Remove attachment',
+                                onPressed: _busy
+                                    ? null
+                                    : () => setState(() => _attachment = null),
+                                icon: const Icon(Icons.close),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.memory(
+                              _attachment!.bytes,
+                              height: 200,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, _, _) =>
+                                  const Text('Image preview unavailable.'),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  height: 50,
+                  child: FilledButton.icon(
+                    onPressed: _busy ? null : _submit,
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_outlined),
+                    label: Text(_busy ? 'Submitting...' : 'Submit Report'),
+                  ),
                 ),
               ],
             ),
@@ -248,95 +278,4 @@ class _ReportFormScreenState extends State<ReportFormScreen> {
       ),
     );
   }
-
-  Widget _reportsView() {
-    return Column(
-      key: const ValueKey('reports-list'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Your reports',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: ListView.separated(
-            itemCount: _reports.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final report = _reports[index];
-              return Card(
-                elevation: 0,
-                child: ListTile(
-                  leading: const Icon(Icons.assignment_outlined),
-                  title: Text(report.title),
-                  subtitle: Text(report.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  trailing: Text(
-                    '${report.submittedAt.month}/${report.submittedAt.day}',
-                    style: const TextStyle(color: Colors.blueGrey),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        AppButton(
-          label: 'Create another report',
-          icon: Icons.add_rounded,
-          onPressed: _startReport,
-        ),
-      ],
-    );
-  }
-
-  Widget _messageView({
-    required Key key,
-    required IconData icon,
-    required String title,
-    required String message,
-    required Widget action,
-  }) {
-    return Center(
-      key: key,
-      child: Card(
-        elevation: 0,
-        color: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: Color(0xFFE0E9E2)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 54, color: const Color(0xFF218653)),
-              const SizedBox(height: 14),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              Text(message, textAlign: TextAlign.center),
-              const SizedBox(height: 22),
-              SizedBox(width: double.infinity, child: action),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ReportRecord {
-  const _ReportRecord({
-    required this.title,
-    required this.description,
-    required this.submittedAt,
-  });
-
-  final String title;
-  final String description;
-  final DateTime submittedAt;
 }

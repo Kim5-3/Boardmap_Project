@@ -35,9 +35,9 @@ class CityBackground extends StatelessWidget {
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                const Color(0xFF003F30).withOpacity(0.96),
-                const Color(0xFF00513B).withOpacity(0.75),
-                const Color(0xFF004D3A).withOpacity(0.32),
+                const Color(0xFF003F30).withValues(alpha: 0.96),
+                const Color(0xFF00513B).withValues(alpha: 0.75),
+                const Color(0xFF004D3A).withValues(alpha: 0.32),
               ],
             ),
           ),

@@ -35,6 +35,10 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   google_fonts: ^9.0.0
+  flutter_map: 8.3.2
+  latlong2: 0.10.1
+  http: ^1.3.0
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -59,6 +63,7 @@ flutter:
   uses-material-design: true
   assets:
     - lib/assets/images/boardmap_logo.png
+    - lib/assets/images/cbr_boardmap_logo.png
     - lib/assets/images/cabadbaran_city.png
 
   

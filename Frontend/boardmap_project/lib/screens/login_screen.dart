@@ -2,28 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:boardmap_project/screens/renter_home_screen.dart';
 import 'package:boardmap_project/screens/owner_home_screen.dart';
+import 'package:boardmap_project/screens/admin_home_screen.dart';
+import 'package:boardmap_project/services/api_service.dart';
+import 'package:boardmap_project/theme_controller.dart';
 
 const Color _green = Color(0xFF00843D);
 const Color _deepGreen = Color(0xFF003D2D);
-const Color _ink = Color(0xFF102A2A);
-const Color _mintBackground = Color(0xFFF1F7F3);
-const Color _fieldBackground = Color(0xFFF8FBF9);
 const Color _borderColor = Color(0xFFDCEBE1);
 const Color _errorRed = Color(0xFFD32F2F);
 const Color _successGreen = Color(0xFF16834A);
 
-class _DemoAccount {
-  const _DemoAccount({
-    required this.password,
-    required this.role,
-  });
-
-  final String password;
-  final String role;
-}
-
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.startInRegister = false});
+  final bool startInRegister;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -32,9 +23,10 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  final _nameController = TextEditingController();
-  final _usernameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _contactController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
@@ -42,11 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _hideConfirmPassword = true;
   bool _createAccount = false;
   bool _acceptTerms = false;
+  bool _isLoading = false;
+  bool _roleConfirmed = false;
+  String? _successMessage;
 
-  // Demo-only account storage. This is cleared when the app restarts.
-  // Replace it with your backend/authentication service for production.
-  final Map<String, _DemoAccount> _demoAccounts = {};
-  String _selectedRole = 'renter';
+  String? _selectedRole;
 
   bool get _passwordsMatch =>
       _confirmPasswordController.text.isNotEmpty &&
@@ -55,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-
+    _createAccount = widget.startInRegister;
     // Revalidate confirmation when either password changes.
     _passwordController.addListener(_onPasswordChanged);
     _confirmPasswordController.addListener(_onConfirmPasswordChanged);
@@ -65,8 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     // Refresh the live match indicator and any existing confirmation error.
-    if (_createAccount &&
-        _confirmPasswordController.text.isNotEmpty) {
+    if (_createAccount && _confirmPasswordController.text.isNotEmpty) {
       _formKey.currentState?.validate();
     }
 
@@ -83,9 +74,10 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordController.removeListener(_onPasswordChanged);
     _confirmPasswordController.removeListener(_onConfirmPasswordChanged);
 
-    _nameController.dispose();
-    _usernameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
+    _contactController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
 
@@ -94,157 +86,63 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
-
     if (!_formKey.currentState!.validate()) return;
-
-    if (_createAccount) {
-      if (!_acceptTerms) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Please agree to the terms and privacy policy.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
-
-      final email = _emailController.text.trim().toLowerCase();
-      final username = _usernameController.text.trim().toLowerCase();
-      if (_demoAccounts.containsKey(email) ||
-          _demoAccounts.containsKey(username)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('That email or username is already registered.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
-
-      // DEMO ONLY: store this account in memory so you can test both roles.
-      // The account is not saved to a database and disappears on app restart.
-      final account = _DemoAccount(
-        password: _passwordController.text,
-        role: _selectedRole,
-      );
-      _demoAccounts[email] = account;
-      _demoAccounts[username] = account;
-
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
-          ),
-          icon: const Icon(
-            Icons.check_circle_rounded,
-            color: _green,
-            size: 54,
-          ),
-          title: Text(
-            'Successfully Created',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w700,
-              color: _ink,
-            ),
-          ),
-          content: Text(
-            'Your form is complete. Connect BoardMap to an authentication '
-            'service to save your account and allow you to sign in.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              height: 1.6,
-              color: const Color(0xFF586A61),
-            ),
-          ),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: _green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(
-                'Back to sign in',
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _createAccount = false;
-        _acceptTerms = false;
-        _selectedRole = 'renter';
-        _nameController.clear();
-        _usernameController.clear();
-        _emailController.clear();
-        _passwordController.clear();
-        _confirmPasswordController.clear();
-        _hidePassword = true;
-        _hideConfirmPassword = true;
-      });
-
-      _formKey.currentState?.reset();
-      return;
-    }
-
-    // DEMO ONLY: verify against accounts created during this app session.
-    // Use your real authentication backend before releasing the app.
-    final identifier = _emailController.text.trim().toLowerCase();
-    final account = _demoAccounts[identifier];
-
-    if (account == null ||
-        account.password != _passwordController.text) {
+    if (_createAccount && !_acceptTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Account not found or password is incorrect. Create a demo account first.',
-          ),
-          behavior: SnackBarBehavior.floating,
+          content: Text('Please agree to the terms and privacy policy.'),
         ),
       );
       return;
     }
 
-    if (account.role != _selectedRole) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'This account is registered as ${account.role}. Select ${account.role} to continue.',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
+    setState(() => _isLoading = true);
+    try {
+      if (_createAccount) {
+        await BoardMapApi.instance.register(
+              fullName:
+                  '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}',
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+              role: _selectedRole!,
+              contactNumber: _contactController.text.trim(),
+            );
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          _createAccount = false;
+          _roleConfirmed = false;
+          _successMessage =
+              'Account created successfully. Sign in with your email and password.';
+          _passwordController.clear();
+          _confirmPasswordController.clear();
+        });
+        return;
+      }
+      final session = await BoardMapApi.instance.login(
+              _emailController.text.trim(),
+              _passwordController.text,
+            );
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      final user = session['user'] as Map<String, dynamic>;
+      _openDashboard(user['role'] as String? ?? 'renter');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.toString())));
     }
+  }
 
-    if (!mounted) return;
-    final Widget homeScreen = account.role == 'owner'
-        ? const OwnerHomeScreen()
-        : const RenterHomeScreen();
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => homeScreen),
-    );
+  void _openDashboard(String role) {
+    final Widget homeScreen = switch (role) {
+      'admin' => const AdminHomeScreen(),
+      'owner' => const OwnerHomeScreen(),
+      _ => const RenterHomeScreen(),
+    };
+    Navigator.of(context)
+        .pushReplacement(MaterialPageRoute<void>(builder: (_) => homeScreen));
   }
 
   String? _required(String? value) {
@@ -259,27 +157,20 @@ class _LoginScreenState extends State<LoginScreen> {
       return 'Please enter your email address.';
     }
 
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-        .hasMatch(value.trim())) {
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim())) {
       return 'Enter a valid email address.';
     }
 
     return null;
   }
 
-  String? _validUsername(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Please choose a username.';
+  String? _validContactNumber(String? value) {
+    final number = (value ?? '').trim();
+    if (number.isEmpty) return 'Enter a contact number.';
+    final digits = number.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 7 || !RegExp(r'^[+0-9() .-]+$').hasMatch(number)) {
+      return 'Use 7 or more digits; spaces, +, and hyphens are okay.';
     }
-
-    if (value.trim().length < 3) {
-      return 'Username must be at least 3 characters.';
-    }
-
-    if (value.trim().contains(RegExp(r'\s'))) {
-      return 'Username cannot contain spaces.';
-    }
-
     return null;
   }
 
@@ -314,16 +205,12 @@ class _LoginScreenState extends State<LoginScreen> {
         Image.asset(
           'lib/assets/images/cabadbaran_city.png',
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
+          errorBuilder: (_, _, _) => Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topRight,
                 end: Alignment.bottomLeft,
-                colors: [
-                  Color(0xFF277A83),
-                  _deepGreen,
-                  Color(0xFF00291F),
-                ],
+                colors: [Color(0xFF277A83), _deepGreen, Color(0xFF00291F)],
               ),
             ),
           ),
@@ -346,17 +233,17 @@ class _LoginScreenState extends State<LoginScreen> {
         Padding(
           padding: EdgeInsets.fromLTRB(
             compact ? 25 : 58,
-            compact ? 22 : 38,
+            compact ? 12 : 20,
             compact ? 25 : 48,
-            compact ? 24 : 35,
+            compact ? 12 : 18,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Image.asset(
-                'lib/assets/images/boardmap_logo.png',
+                'lib/assets/images/cbr_boardmap_logo.png',
                 width: compact ? 105 : 145,
-                height: compact ? 105 : 145,
+                height: compact ? 64 : 120,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) => Text(
                   'CBR BoardMap',
@@ -367,7 +254,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              SizedBox(height: compact ? 10 : 30),
+              Text(
+                'BoardMap',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: compact ? 18 : 22,
+                ),
+              ),
+              SizedBox(height: compact ? 5 : 20),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 15,
@@ -399,7 +294,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              SizedBox(height: compact ? 18 : 24),
+              SizedBox(height: compact ? 8 : 24),
               Text.rich(
                 TextSpan(
                   children: [
@@ -420,7 +315,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
                 style: GoogleFonts.poppins(
-                  fontSize: compact ? 31 : 39,
+                  fontSize: compact ? 24 : 39,
                   height: 1.15,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -1.1,
@@ -434,77 +329,70 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: compact ? 7 : 16),
               Text(
-                'Discover boarding houses with a smarter,\n'
-                'map-based way to explore your next home.',
+                compact ? 'Discover boarding houses in Cabadbaran City.' : 'Discover boarding houses with a smarter,\nmap-based way to explore your next home.',
                 style: GoogleFonts.poppins(
                   color: Colors.white,
                   fontSize: compact ? 13 : 15,
                   height: 1.6,
                   fontWeight: FontWeight.w500,
-                  shadows: const [
-                    Shadow(
-                      color: Colors.black87,
-                      blurRadius: 3,
+                  shadows: const [Shadow(color: Colors.black87, blurRadius: 3)],
+                ),
+              ),
+              if (!compact) ...[
+                const SizedBox(height: 28),
+                _feature(
+                  Icons.home_work_outlined,
+                  'Explore Locations',
+                  'Find the best boarding houses\nnear you.',
+                  compact,
+                ),
+                const SizedBox(height: 13),
+                _feature(
+                  Icons.map_outlined,
+                  'View on Map',
+                  'Easily search and explore\nCabadbaran City.',
+                  compact,
+                ),
+                const SizedBox(height: 13),
+                _feature(
+                  Icons.star_outline,
+                  'Make Better Choices',
+                  'Plan your stay with confidence.',
+                  compact,
+                ),
+                const Spacer(),
+                Container(
+                  height: 1,
+                  width: compact ? 200 : 280,
+                  color: Colors.white.withValues(alpha: .65),
+                ),
+                const SizedBox(height: 15),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on,
+                      color: Color(0xFF4BFF91),
+                      size: 23,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Cabadbaran City, Agusan del Norte',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          shadows: const [
+                            Shadow(color: Colors.black, blurRadius: 3),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              SizedBox(height: compact ? 20 : 28),
-              _feature(
-                Icons.home_work_outlined,
-                'Explore Locations',
-                'Find the best boarding houses\nnear you.',
-                compact,
-              ),
-              const SizedBox(height: 13),
-              _feature(
-                Icons.map_outlined,
-                'View on Map',
-                'Easily search and explore\nCabadbaran City.',
-                compact,
-              ),
-              const SizedBox(height: 13),
-              _feature(
-                Icons.star_outline,
-                'Make Better Choices',
-                'Plan your stay with confidence.',
-                compact,
-              ),
-              const Spacer(),
-              Container(
-                height: 1,
-                width: compact ? 200 : 280,
-                color: Colors.white.withValues(alpha: .65),
-              ),
-              const SizedBox(height: 15),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.location_on,
-                    color: Color(0xFF4BFF91),
-                    size: 23,
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      'Cabadbaran City, Agusan del Norte',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        shadows: const [
-                          Shadow(
-                            color: Colors.black,
-                            blurRadius: 3,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ],
           ),
         ),
@@ -526,15 +414,9 @@ class _LoginScreenState extends State<LoginScreen> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: _green.withValues(alpha: .85),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: .25),
-            ),
+            border: Border.all(color: Colors.white.withValues(alpha: .25)),
           ),
-          child: Icon(
-            icon,
-            color: Colors.white,
-            size: compact ? 25 : 34,
-          ),
+          child: Icon(icon, color: Colors.white, size: compact ? 25 : 34),
         ),
         SizedBox(width: compact ? 12 : 18),
         Expanded(
@@ -547,12 +429,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Colors.white,
                   fontSize: compact ? 13 : 15,
                   fontWeight: FontWeight.w700,
-                  shadows: const [
-                    Shadow(
-                      color: Colors.black87,
-                      blurRadius: 3,
-                    ),
-                  ],
+                  shadows: const [Shadow(color: Colors.black87, blurRadius: 3)],
                 ),
               ),
               const SizedBox(height: 3),
@@ -562,12 +439,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Colors.white,
                   fontSize: compact ? 11 : 12,
                   height: 1.4,
-                  shadows: const [
-                    Shadow(
-                      color: Colors.black87,
-                      blurRadius: 3,
-                    ),
-                  ],
+                  shadows: const [Shadow(color: Colors.black87, blurRadius: 3)],
                 ),
               ),
             ],
@@ -580,20 +452,22 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildFormPanel({bool compact = false}) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final colors = Theme.of(context).colorScheme;
         // Reduce spacing when the available height is limited.
         final bool tight = constraints.maxHeight < 760;
-        final double horizontalPadding =
-            compact ? 18 : (tight ? 22 : 36);
-        final double cardPadding =
-            compact ? 20 : (tight ? 22 : 30);
+        if (_createAccount && !_roleConfirmed) {
+          return _buildRoleSelectionPanel(compact: compact || tight);
+        }
+        final double horizontalPadding = compact ? 18 : (tight ? 22 : 36);
+        final double cardPadding = compact ? 20 : (tight ? 22 : 30);
         final double fieldGap = tight ? 10 : 13;
 
         final formContent = Container(
           padding: EdgeInsets.all(cardPadding),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: colors.surface,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: _borderColor),
+            border: Border.all(color: colors.outlineVariant),
             boxShadow: [
               BoxShadow(
                 color: _deepGreen.withValues(alpha: .07),
@@ -614,14 +488,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: 46,
                       height: 46,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5EC),
+                        color: colors.secondaryContainer,
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(
                         _createAccount
                             ? Icons.person_add_alt_1_rounded
                             : Icons.lock_person_outlined,
-                        color: _green,
+                        color: colors.primary,
                         size: 24,
                       ),
                     ),
@@ -632,21 +506,21 @@ class _LoginScreenState extends State<LoginScreen> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF0F8F2),
+                        color: colors.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.verified_user_outlined,
-                            color: _green,
+                            color: colors.primary,
                             size: 14,
                           ),
                           const SizedBox(width: 5),
                           Text(
                             'BOARDMAP',
                             style: GoogleFonts.poppins(
-                              color: _deepGreen,
+                              color: colors.onSurface,
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                               letterSpacing: .6,
@@ -663,7 +537,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: GoogleFonts.poppins(
                     fontSize: compact ? 26 : (tight ? 27 : 31),
                     height: 1.2,
-                    color: _ink,
+                    color: colors.onSurface,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -.8,
                   ),
@@ -675,16 +549,34 @@ class _LoginScreenState extends State<LoginScreen> {
                       : 'Sign in to continue exploring BoardMap.',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
-                    color: const Color(0xFF64746B),
+                    color: colors.onSurfaceVariant,
                     height: 1.6,
                   ),
                 ),
+                if (_successMessage case final success?) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colors.secondaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      success,
+                      style: TextStyle(
+                        color: colors.onSecondaryContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
                 SizedBox(height: tight ? 18 : 24),
 
                 if (_createAccount) ...[
                   _inputField(
-                    controller: _nameController,
-                    label: 'Full name',
+                    controller: _firstNameController,
+                    label: 'First name',
                     icon: Icons.person_outline_rounded,
                     validator: _required,
                     requiredField: true,
@@ -692,18 +584,38 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   SizedBox(height: fieldGap),
                   _inputField(
-                    controller: _usernameController,
-                    label: 'Username',
-                    icon: Icons.alternate_email_rounded,
-                    validator: _validUsername,
+                    controller: _lastNameController,
+                    label: 'Last name',
+                    icon: Icons.person_outline_rounded,
+                    validator: _required,
                     requiredField: true,
                     compact: compact || tight,
                   ),
                   SizedBox(height: fieldGap),
                 ],
 
-                _roleDropdown(compact: compact || tight),
-                SizedBox(height: fieldGap),
+                if (_createAccount) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _selectedRole == 'owner'
+                              ? 'Owner account'
+                              : 'Renter account',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w700,
+                            color: _deepGreen,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() => _roleConfirmed = false),
+                        child: const Text('Change'),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: fieldGap),
+                ],
 
                 _inputField(
                   controller: _emailController,
@@ -715,6 +627,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 SizedBox(height: fieldGap),
 
+                if (_createAccount) ...[
+                  _inputField(
+                    controller: _contactController,
+                    label: 'Contact number',
+                    icon: Icons.phone_outlined,
+                    validator: _validContactNumber,
+                    requiredField: true,
+                    compact: compact || tight,
+                  ),
+                  SizedBox(height: fieldGap),
+                ],
+
                 _inputField(
                   controller: _passwordController,
                   label: 'Password',
@@ -724,9 +648,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   requiredField: _createAccount,
                   compact: compact || tight,
                   suffix: IconButton(
-                    tooltip: _hidePassword
-                        ? 'Show password'
-                        : 'Hide password',
+                    tooltip: _hidePassword ? 'Show password' : 'Hide password',
                     onPressed: () {
                       setState(() {
                         _hidePassword = !_hidePassword;
@@ -736,7 +658,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       _hidePassword
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: const Color(0xFF738078),
+                      color: colors.onSurfaceVariant,
                       size: 21,
                     ),
                   ),
@@ -768,15 +690,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               : 'Hide password',
                           onPressed: () {
                             setState(() {
-                              _hideConfirmPassword =
-                                  !_hideConfirmPassword;
+                              _hideConfirmPassword = !_hideConfirmPassword;
                             });
                           },
                           icon: Icon(
                             _hideConfirmPassword
                                 ? Icons.visibility_off_outlined
                                 : Icons.visibility_outlined,
-                            color: const Color(0xFF738078),
+                            color: colors.onSurfaceVariant,
                             size: 21,
                           ),
                         ),
@@ -794,7 +715,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         size: 16,
                         color: _passwordsMatch
                             ? _successGreen
-                            : const Color(0xFF738078),
+                            : colors.onSurfaceVariant,
                       ),
                       const SizedBox(width: 7),
                       Expanded(
@@ -803,14 +724,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                   _confirmPasswordController.text.isEmpty
                               ? 'Use at least 8 characters and confirm your password.'
                               : _passwordsMatch
-                                  ? 'Your passwords match.'
-                                  : 'Your passwords do not match yet.',
+                              ? 'Your passwords match.'
+                              : 'Your passwords do not match yet.',
                           style: GoogleFonts.poppins(
                             fontSize: 10,
                             height: 1.5,
                             color: _passwordsMatch
                                 ? _successGreen
-                                : const Color(0xFF738078),
+                                : colors.onSurfaceVariant,
                           ),
                         ),
                       ),
@@ -825,43 +746,45 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    child: CheckboxListTile(
-                      value: _acceptTerms,
-                      onChanged: (value) {
-                        setState(() {
-                          _acceptTerms = value ?? false;
-                        });
-                      },
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      activeColor: _green,
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
-                      title: Text.rich(
-                        TextSpan(
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            color: _ink,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: CheckboxListTile(
+                        value: _acceptTerms,
+                        onChanged: (value) {
+                          setState(() {
+                            _acceptTerms = value ?? false;
+                          });
+                        },
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        activeColor: _green,
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        title: Text.rich(
+                          TextSpan(
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                            ),
+                            children: const [
+                              TextSpan(text: 'I agree to the '),
+                              TextSpan(
+                                text: 'Terms',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: _green,
+                                ),
+                              ),
+                              TextSpan(text: ' and '),
+                              TextSpan(
+                                text: 'Privacy Policy',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: _green,
+                                ),
+                              ),
+                              TextSpan(text: '.'),
+                            ],
                           ),
-                          children: const [
-                            TextSpan(text: 'I agree to the '),
-                            TextSpan(
-                              text: 'Terms',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: _green,
-                              ),
-                            ),
-                            TextSpan(text: ' and '),
-                            TextSpan(
-                              text: 'Privacy Policy',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: _green,
-                              ),
-                            ),
-                            TextSpan(text: '.'),
-                          ],
                         ),
                       ),
                     ),
@@ -895,7 +818,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: _submit,
+                    onPressed: _isLoading ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _green,
                       foregroundColor: Colors.white,
@@ -905,30 +828,38 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(13),
                       ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _createAccount
-                              ? Icons.person_add_alt_1_rounded
-                              : Icons.login_rounded,
-                          size: 19,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          _createAccount ? 'Create account' : 'Sign in',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                    child: _isLoading
+                        ? const Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _createAccount
+                                    ? Icons.person_add_alt_1_rounded
+                                    : Icons.login_rounded,
+                                size: 19,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                _createAccount ? 'Create account' : 'Sign in',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.arrow_forward_rounded, size: 17),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 17,
-                        ),
-                      ],
-                    ),
                   ),
                 ),
 
@@ -936,28 +867,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 Row(
                   children: [
-                    Expanded(
-                      child: Divider(
-                        color: Colors.blueGrey.shade100,
-                      ),
-                    ),
+                    Expanded(child: Divider()),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
                         'OR',
                         style: GoogleFonts.poppins(
-                          color: const Color(0xFF87938C),
+                          color: colors.onSurfaceVariant,
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 1,
                         ),
                       ),
                     ),
-                    Expanded(
-                      child: Divider(
-                        color: Colors.blueGrey.shade100,
-                      ),
-                    ),
+                    Expanded(child: Divider()),
                   ],
                 ),
 
@@ -970,10 +893,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _toggleForm,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _deepGreen,
-                      side: const BorderSide(
-                        color: _borderColor,
-                        width: 1.4,
-                      ),
+                      side: const BorderSide(color: _borderColor, width: 1.4),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(13),
                       ),
@@ -1019,7 +939,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           'BoardMap • Cabadbaran City',
                           textAlign: TextAlign.center,
                           style: GoogleFonts.poppins(
-                            color: const Color(0xFF718078),
+                            color: colors.onSurfaceVariant,
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
                           ),
@@ -1037,7 +957,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // On compact screens, scrolling prevents keyboard and height overflow.
         if (compact) {
           return Container(
-            color: _mintBackground,
+            color: Theme.of(context).scaffoldBackgroundColor,
             child: SingleChildScrollView(
               padding: EdgeInsets.symmetric(
                 horizontal: horizontalPadding,
@@ -1054,7 +974,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         return Container(
-          color: _mintBackground,
+          color: Theme.of(context).scaffoldBackgroundColor,
           child: SingleChildScrollView(
             padding: EdgeInsets.symmetric(
               horizontal: horizontalPadding,
@@ -1076,16 +996,19 @@ class _LoginScreenState extends State<LoginScreen> {
     FocusScope.of(context).unfocus();
 
     setState(() {
+      _successMessage = null;
       _createAccount = !_createAccount;
       _acceptTerms = false;
-      _selectedRole = 'renter';
+      _selectedRole = null;
+      _roleConfirmed = false;
       _hidePassword = true;
       _hideConfirmPassword = true;
 
       // Avoid carrying validation messages into the other form.
-      _nameController.clear();
-      _usernameController.clear();
+      _firstNameController.clear();
+      _lastNameController.clear();
       _emailController.clear();
+      _contactController.clear();
       _passwordController.clear();
       _confirmPasswordController.clear();
     });
@@ -1093,9 +1016,218 @@ class _LoginScreenState extends State<LoginScreen> {
     _formKey.currentState?.reset();
   }
 
-  Widget _roleDropdown({bool compact = false}) {
+  Widget _buildRoleSelectionPanel({bool compact = false}) => Container(
+    color: Theme.of(context).scaffoldBackgroundColor,
+    alignment: Alignment.center,
+    child: SingleChildScrollView(
+      padding: EdgeInsets.all(compact ? 18 : 28),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 20 : 30),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Icon(
+                  Icons.map_rounded,
+                  size: 42,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'How will you use BoardMap?',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Choose the account that fits what you need. You can continue to the matching sign-up form next.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _roleCards(compact: compact),
+                if (_selectedRole != null) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    _selectedRole == 'renter'
+                        ? 'Find boarding houses, explore map locations, compare prices, save favorites, and contact owners.'
+                        : 'Add and manage properties, update availability, respond to renter inquiries, and review listing status.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                SizedBox(
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: _selectedRole == null
+                        ? null
+                        : () => setState(() => _roleConfirmed = true),
+                    icon: const Icon(Icons.arrow_forward),
+                    label: const Text('Continue to sign up'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: _toggleForm,
+                  icon: const Icon(Icons.arrow_back),
+                  label: const Text('Back to sign in'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _roleCards({bool compact = false}) {
+    return FormField<String>(
+      initialValue: _selectedRole,
+      validator: (value) => value == 'renter' || value == 'owner'
+          ? null
+          : 'Choose a role to continue.',
+      builder: (field) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Choose your account type',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: compact ? 7 : 9),
+          Row(
+            children: [
+              Expanded(
+                child: _roleChoiceCard(
+                  field,
+                  'renter',
+                  Icons.search_rounded,
+                  'Renter',
+                  'Find and save homes',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _roleChoiceCard(
+                  field,
+                  'owner',
+                  Icons.home_work_outlined,
+                  'Owner',
+                  'Manage listings',
+                ),
+              ),
+            ],
+          ),
+          if (field.errorText != null) ...[
+            const SizedBox(height: 5),
+            Text(
+              field.errorText!,
+              style: GoogleFonts.poppins(color: _errorRed, fontSize: 10),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _roleChoiceCard(
+    FormFieldState<String> field,
+    String role,
+    IconData icon,
+    String title,
+    String description,
+  ) {
+    final selected = field.value == role;
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$title. $description',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          field.didChange(role);
+          setState(() => _selectedRole = role);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: selected
+                ? colors.secondaryContainer
+                : colors.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? colors.primary : colors.outlineVariant,
+              width: selected ? 1.7 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: colors.primary, size: 20),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: colors.onSurface,
+                      ),
+                    ),
+                    Text(
+                      description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 9,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                Icon(
+                  Icons.check_circle_rounded,
+                  color: colors.primary,
+                  size: 16,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget roleDropdown({bool compact = false}) {
+    final colors = Theme.of(context).colorScheme;
     return DropdownButtonFormField<String>(
-      value: _selectedRole,
+      initialValue: _selectedRole,
       isExpanded: true,
       decoration: InputDecoration(
         labelText: 'Account type',
@@ -1105,7 +1237,7 @@ class _LoginScreenState extends State<LoginScreen> {
           size: 20,
         ),
         filled: true,
-        fillColor: _fieldBackground,
+        fillColor: colors.surfaceContainerHighest,
         isDense: true,
         contentPadding: EdgeInsets.symmetric(
           horizontal: 14,
@@ -1113,17 +1245,11 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: Color(0xFFD9E4DC),
-            width: 1.1,
-          ),
+          borderSide: const BorderSide(color: Color(0xFFD9E4DC), width: 1.1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: _green,
-            width: 1.6,
-          ),
+          borderSide: const BorderSide(color: _green, width: 1.6),
         ),
       ),
       items: const [
@@ -1140,10 +1266,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (value == null) return;
         setState(() => _selectedRole = value);
       },
-      validator: (value) =>
-          value == 'renter' || value == 'owner'
-              ? null
-              : 'Choose an account type.',
+      validator: (value) => value == 'renter' || value == 'owner'
+          ? null
+          : 'Choose an account type.',
     );
   }
 
@@ -1158,6 +1283,7 @@ class _LoginScreenState extends State<LoginScreen> {
     bool showLiveValidation = false,
     bool compact = false,
   }) {
+    final colors = Theme.of(context).colorScheme;
     return TextFormField(
       controller: controller,
       obscureText: obscure,
@@ -1167,7 +1293,7 @@ class _LoginScreenState extends State<LoginScreen> {
           : AutovalidateMode.disabled,
       style: GoogleFonts.poppins(
         fontSize: 13,
-        color: _ink,
+        color: colors.onSurface,
         fontWeight: FontWeight.w500,
       ),
       decoration: InputDecoration(
@@ -1187,7 +1313,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         labelStyle: GoogleFonts.poppins(
-          color: const Color(0xFF738078),
+          color: colors.onSurfaceVariant,
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
@@ -1196,14 +1322,10 @@ class _LoginScreenState extends State<LoginScreen> {
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
-        prefixIcon: Icon(
-          icon,
-          color: _deepGreen,
-          size: 20,
-        ),
+        prefixIcon: Icon(icon, color: colors.primary, size: 20),
         suffixIcon: suffix,
         filled: true,
-        fillColor: _fieldBackground,
+        fillColor: colors.surfaceContainerHighest,
         isDense: true,
         contentPadding: EdgeInsets.symmetric(
           horizontal: 14,
@@ -1211,36 +1333,21 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: Color(0xFFD9E4DC),
-            width: 1.1,
-          ),
+          borderSide: const BorderSide(color: Color(0xFFD9E4DC), width: 1.1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: _green,
-            width: 1.6,
-          ),
+          borderSide: const BorderSide(color: _green, width: 1.6),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: _errorRed,
-            width: 1.1,
-          ),
+          borderSide: const BorderSide(color: _errorRed, width: 1.1),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: _errorRed,
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: _errorRed, width: 1.5),
         ),
-        errorStyle: GoogleFonts.poppins(
-          fontSize: 10,
-          height: 1.3,
-        ),
+        errorStyle: GoogleFonts.poppins(fontSize: 10, height: 1.3),
       ),
     );
   }
@@ -1249,20 +1356,11 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        icon: const Icon(
-          Icons.lock_reset_rounded,
-          color: _green,
-          size: 42,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: const Icon(Icons.lock_reset_rounded, color: _green, size: 42),
         title: Text(
           'Forgot password?',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w700,
-            color: _ink,
-          ),
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700),
         ),
         content: Text(
           'Password recovery needs to be connected to your authentication '
@@ -1270,7 +1368,7 @@ class _LoginScreenState extends State<LoginScreen> {
           style: GoogleFonts.poppins(
             fontSize: 13,
             height: 1.6,
-            color: const Color(0xFF64746B),
+            color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
           ),
         ),
         actions: [
@@ -1292,48 +1390,52 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: Theme.of(context).copyWith(
-        textTheme: Theme.of(context).textTheme,
-        colorScheme: Theme.of(context).colorScheme.copyWith(
-          primary: _green,
-          surface: Colors.white,
-        ),
-      ),
+      data: Theme.of(context),
       child: Scaffold(
-        backgroundColor: _mintBackground,
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final bool compact = constraints.maxWidth < 850;
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: Stack(
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final bool compact = constraints.maxWidth < 850;
 
-            if (compact) {
-              return SafeArea(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        height: constraints.maxHeight < 700 ? 350 : 430,
-                        child: _buildPromoPanel(compact: true),
+                if (compact) {
+                  return SafeArea(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            height: constraints.maxHeight < 700 ? 350 : 430,
+                            child: _buildPromoPanel(compact: true),
+                          ),
+                          _buildFormPanel(compact: true),
+                        ],
                       ),
-                      _buildFormPanel(compact: true),
-                    ],
-                  ),
-                ),
-              );
-            }
+                    ),
+                  );
+                }
 
-            return Row(
-              children: [
-                Expanded(
-                  flex: 53,
-                  child: _buildPromoPanel(),
+                return Row(
+                  children: [
+                    Expanded(flex: 53, child: _buildPromoPanel()),
+                    Expanded(flex: 47, child: _buildFormPanel()),
+                  ],
+                );
+              },
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: SafeArea(
+                child: Material(
+                  color: Theme.of(context).colorScheme.surface
+                      .withValues(alpha: .9),
+                  shape: const CircleBorder(),
+                  child: const BoardMapThemeToggle(),
                 ),
-                Expanded(
-                  flex: 47,
-                  child: _buildFormPanel(),
-                ),
-              ],
-            );
-          },
+              ),
+            ),
+          ],
         ),
       ),
     );

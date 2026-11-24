@@ -58,7 +58,7 @@ class _CityMapPanelState extends State<CityMapPanel>
                   right: 24,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.13), borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.white24)),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.13), borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.white24)),
                     child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.location_on_outlined, color: Color(0xFF8BE0B0), size: 16), SizedBox(width: 6), Text('CABADBARAN CITY', style: TextStyle(color: Colors.white, fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w800))]),
                   ),
                 ),
@@ -67,7 +67,7 @@ class _CityMapPanelState extends State<CityMapPanel>
                   bottom: 26,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.20), borderRadius: BorderRadius.circular(9)),
+                    decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.20), borderRadius: BorderRadius.circular(9)),
                     child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.open_with, size: 15, color: Colors.white70), SizedBox(width: 7), Text('Drag to explore the map', style: TextStyle(color: Colors.white70, fontSize: 11))]),
                   ),
                 ),
